@@ -112,7 +112,7 @@ void textBufferViewSetWrapMode(TextBufferView* view, uint8_t mode);
 void textBufferViewSetViewportSize(TextBufferView* view, uint32_t width, uint32_t height);
 void textBufferViewSetViewport(TextBufferView* view, uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 uint32_t textBufferViewGetVirtualLineCount(TextBufferView* view);
-void textBufferViewMeasureForDimensions(TextBufferView* view, uint32_t width, uint32_t height, uint32_t* outWidth, uint32_t* outHeight);
+void textBufferViewMeasureForDimensions(TextBufferView* view, uint32_t width, uint32_t height, uint32_t* outLineCount, uint32_t* outMaxWidth);
 
 // Drawing TextBufferView
 void bufferDrawTextBufferView(OptimizedBuffer* buffer, TextBufferView* view, int32_t x, int32_t y);

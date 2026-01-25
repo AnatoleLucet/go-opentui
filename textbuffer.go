@@ -216,14 +216,14 @@ func (v *TextBufferView) GetVirtualLineCount() uint32 {
 }
 
 // MeasureForDimensions measures text for the given dimensions.
-// Returns the actual width and height needed.
+// Returns the actual width and height (line count) needed.
 func (v *TextBufferView) MeasureForDimensions(width, height uint32) (outWidth, outHeight uint32) {
 	if v.ptr == nil {
 		return 0, 0
 	}
-	var w, h C.uint32_t
-	C.textBufferViewMeasureForDimensions(v.ptr, C.uint32_t(width), C.uint32_t(height), &w, &h)
-	return uint32(w), uint32(h)
+	var lineCount, maxWidth C.uint32_t
+	C.textBufferViewMeasureForDimensions(v.ptr, C.uint32_t(width), C.uint32_t(height), &lineCount, &maxWidth)
+	return uint32(maxWidth), uint32(lineCount)
 }
 
 // Valid checks if the view is still valid.
