@@ -21,12 +21,12 @@ func NewRenderer(width, height uint32) *Renderer {
 	if width == 0 || height == 0 {
 		return nil
 	}
-	
+
 	ptr := C.createRenderer(C.uint32_t(width), C.uint32_t(height), C.bool(false))
 	if ptr == nil {
 		return nil
 	}
-	
+
 	r := &Renderer{ptr: ptr}
 	setFinalizer(r, func(r *Renderer) { r.Close() })
 	return r
@@ -37,17 +37,7 @@ func NewRenderer(width, height uint32) *Renderer {
 func (r *Renderer) Close() error {
 	if r.ptr != nil {
 		clearFinalizer(r)
-		C.destroyRenderer(r.ptr, C.bool(false), C.uint32_t(0))
-		r.ptr = nil
-	}
-	return nil
-}
-
-// CloseWithOptions destroys the renderer with specific cleanup options.
-func (r *Renderer) CloseWithOptions(useAlternateScreen bool, splitHeight uint32) error {
-	if r.ptr != nil {
-		clearFinalizer(r)
-		C.destroyRenderer(r.ptr, C.bool(useAlternateScreen), C.uint32_t(splitHeight))
+		C.destroyRenderer(r.ptr)
 		r.ptr = nil
 	}
 	return nil
@@ -104,12 +94,12 @@ func (r *Renderer) GetNextBuffer() (*Buffer, error) {
 	if r.ptr == nil {
 		return nil, newError("renderer is closed")
 	}
-	
+
 	bufferPtr := C.getNextBuffer(r.ptr)
 	if bufferPtr == nil {
 		return nil, newError("failed to get next buffer")
 	}
-	
+
 	// Don't set a finalizer for buffers obtained from renderer,
 	// they are managed by the renderer itself
 	return &Buffer{ptr: bufferPtr, managed: true}, nil
@@ -120,12 +110,12 @@ func (r *Renderer) GetCurrentBuffer() (*Buffer, error) {
 	if r.ptr == nil {
 		return nil, newError("renderer is closed")
 	}
-	
+
 	bufferPtr := C.getCurrentBuffer(r.ptr)
 	if bufferPtr == nil {
 		return nil, newError("failed to get current buffer")
 	}
-	
+
 	return &Buffer{ptr: bufferPtr, managed: true}, nil
 }
 
@@ -240,15 +230,28 @@ func (r *Renderer) GetTerminalCapabilities() (*Capabilities, error) {
 	if r.ptr == nil {
 		return nil, newError("renderer is closed")
 	}
-	
+
 	var caps C.Capabilities
 	C.getTerminalCapabilities(r.ptr, &caps)
-	
+
 	return &Capabilities{
-		SupportsTruecolor:       bool(caps.supports_truecolor),
-		SupportsMouse:          bool(caps.supports_mouse),
-		SupportsKittyKeyboard:  bool(caps.supports_kitty_keyboard),
-		SupportsAlternateScreen: bool(caps.supports_alternate_screen),
+		KittyKeyboard:             caps.kitty_keyboard != 0,
+		KittyGraphics:             caps.kitty_graphics != 0,
+		RGB:                       caps.rgb != 0,
+		Unicode:                   UnicodeMethod(caps.unicode),
+		SGRPixels:                 caps.sgr_pixels != 0,
+		ColorSchemeUpdates:        caps.color_scheme_updates != 0,
+		ExplicitWidth:             caps.explicit_width != 0,
+		ScaledText:                caps.scaled_text != 0,
+		Sixel:                     caps.sixel != 0,
+		FocusTracking:             caps.focus_tracking != 0,
+		Sync:                      caps.sync != 0,
+		BracketedPaste:            caps.bracketed_paste != 0,
+		Hyperlinks:                caps.hyperlinks != 0,
+		ExplicitCursorPositioning: caps.explicit_cursor_positioning != 0,
+		TermName:                  C.GoStringN(caps.term_name, C.int(caps.term_name_len)),
+		TermVersion:               C.GoStringN(caps.term_version, C.int(caps.term_version_len)),
+		TermFromXTVersion:         caps.term_from_xtversion != 0,
 	}, nil
 }
 
@@ -260,7 +263,7 @@ func (r *Renderer) ProcessCapabilityResponse(response []byte) error {
 	if len(response) == 0 {
 		return nil
 	}
-	
+
 	responsePtr, responseLen := sliceToC(response)
 	C.processCapabilityResponse(r.ptr, (*C.uint8_t)(responsePtr), C.size_t(responseLen))
 	return nil
@@ -333,4 +336,149 @@ func (r *Renderer) ensureValid() error {
 		return newError("renderer is closed")
 	}
 	return nil
+}
+
+// GetCursorState returns the current cursor state.
+func (r *Renderer) GetCursorState() (*CursorState, error) {
+	if r.ptr == nil {
+		return nil, newError("renderer is closed")
+	}
+	var state C.CursorState
+	C.getCursorState(r.ptr, &state)
+	return &CursorState{
+		X:        uint32(state.x),
+		Y:        uint32(state.y),
+		Visible:  bool(state.visible),
+		Style:    uint8(state.style),
+		Blinking: bool(state.blinking),
+		Color:    NewRGBA(float32(state.r), float32(state.g), float32(state.b), float32(state.a)),
+	}, nil
+}
+
+// QueryPixelResolution queries the terminal's pixel resolution.
+func (r *Renderer) QueryPixelResolution() error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	C.queryPixelResolution(r.ptr)
+	return nil
+}
+
+// SetTerminalTitle sets the terminal window title.
+func (r *Renderer) SetTerminalTitle(title string) error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	titlePtr, titleLen := stringToC(title)
+	C.setTerminalTitle(r.ptr, titlePtr, titleLen)
+	return nil
+}
+
+// Suspend suspends the renderer.
+func (r *Renderer) Suspend() error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	C.suspendRenderer(r.ptr)
+	return nil
+}
+
+// Resume resumes the renderer.
+func (r *Renderer) Resume() error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	C.resumeRenderer(r.ptr)
+	return nil
+}
+
+// WriteOut writes raw data to the terminal output.
+func (r *Renderer) WriteOut(data []byte) error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	if len(data) == 0 {
+		return nil
+	}
+	C.writeOut(r.ptr, (*C.uint8_t)(unsafe.Pointer(&data[0])), C.size_t(len(data)))
+	return nil
+}
+
+// SetHyperlinksCapability enables or disables hyperlinks support.
+func (r *Renderer) SetHyperlinksCapability(enabled bool) error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	C.setHyperlinksCapability(r.ptr, C.bool(enabled))
+	return nil
+}
+
+// ClearCurrentHitGrid clears the current hit grid.
+func (r *Renderer) ClearCurrentHitGrid() error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	C.clearCurrentHitGrid(r.ptr)
+	return nil
+}
+
+// HitGridPushScissorRect pushes a scissor rect onto the hit grid stack.
+func (r *Renderer) HitGridPushScissorRect(x, y int32, width, height uint32) error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	C.hitGridPushScissorRect(r.ptr, C.int32_t(x), C.int32_t(y), C.uint32_t(width), C.uint32_t(height))
+	return nil
+}
+
+// HitGridPopScissorRect pops a scissor rect from the hit grid stack.
+func (r *Renderer) HitGridPopScissorRect() error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	C.hitGridPopScissorRect(r.ptr)
+	return nil
+}
+
+// HitGridClearScissorRects clears all hit grid scissor rects.
+func (r *Renderer) HitGridClearScissorRects() error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	C.hitGridClearScissorRects(r.ptr)
+	return nil
+}
+
+// AddToCurrentHitGridClipped adds a clipped hit area to the current hit grid.
+func (r *Renderer) AddToCurrentHitGridClipped(x, y int32, width, height, id uint32) error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	C.addToCurrentHitGridClipped(r.ptr, C.int32_t(x), C.int32_t(y), C.uint32_t(width), C.uint32_t(height), C.uint32_t(id))
+	return nil
+}
+
+// GetHitGridDirty returns whether the hit grid is dirty.
+func (r *Renderer) GetHitGridDirty() (bool, error) {
+	if r.ptr == nil {
+		return false, newError("renderer is closed")
+	}
+	return bool(C.getHitGridDirty(r.ptr)), nil
+}
+
+// SetKittyKeyboardFlags sets the Kitty keyboard protocol flags.
+func (r *Renderer) SetKittyKeyboardFlags(flags uint8) error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	C.setKittyKeyboardFlags(r.ptr, C.uint8_t(flags))
+	return nil
+}
+
+// GetKittyKeyboardFlags returns the current Kitty keyboard protocol flags.
+func (r *Renderer) GetKittyKeyboardFlags() (uint8, error) {
+	if r.ptr == nil {
+		return 0, newError("renderer is closed")
+	}
+	return uint8(C.getKittyKeyboardFlags(r.ptr)), nil
 }

@@ -26,11 +26,26 @@ const (
 // If respectAlpha is true, the buffer will handle alpha blending.
 // The widthMethod parameter controls how text width is calculated (use WidthMethodUnicode for full Unicode support).
 func NewBuffer(width, height uint32, respectAlpha bool, widthMethod uint8) *Buffer {
+	return NewBufferWithID(width, height, respectAlpha, widthMethod, "")
+}
+
+// NewBufferWithID creates a new buffer with the specified dimensions and ID.
+// If respectAlpha is true, the buffer will handle alpha blending.
+// The widthMethod parameter controls how text width is calculated (use WidthMethodUnicode for full Unicode support).
+// The id parameter is used for debugging/identification purposes.
+func NewBufferWithID(width, height uint32, respectAlpha bool, widthMethod uint8, id string) *Buffer {
 	if width == 0 || height == 0 {
 		return nil
 	}
 
-	ptr := C.createOptimizedBuffer(C.uint32_t(width), C.uint32_t(height), C.bool(respectAlpha), C.uint8_t(widthMethod))
+	var idPtr *C.uint8_t
+	var idLen C.size_t
+	if len(id) > 0 {
+		idPtr = (*C.uint8_t)(unsafe.Pointer(&[]byte(id)[0]))
+		idLen = C.size_t(len(id))
+	}
+
+	ptr := C.createOptimizedBuffer(C.uint32_t(width), C.uint32_t(height), C.bool(respectAlpha), C.uint8_t(widthMethod), idPtr, idLen)
 	if ptr == nil {
 		return nil
 	}
@@ -105,7 +120,7 @@ func (b *Buffer) SetRespectAlpha(respectAlpha bool) error {
 }
 
 // DrawText draws text at the specified position with the given colors and attributes.
-func (b *Buffer) DrawText(text string, x, y uint32, fg RGBA, bg *RGBA, attributes uint8) error {
+func (b *Buffer) DrawText(text string, x, y uint32, fg RGBA, bg *RGBA, attributes uint32) error {
 	if b.ptr == nil {
 		return newError("buffer is closed")
 	}
@@ -120,16 +135,16 @@ func (b *Buffer) DrawText(text string, x, y uint32, fg RGBA, bg *RGBA, attribute
 		bgPtr = bg.toCFloat()
 	}
 
-	C.bufferDrawText(b.ptr, textPtr, textLen, C.uint32_t(x), C.uint32_t(y), fg.toCFloat(), bgPtr, C.uint8_t(attributes))
+	C.bufferDrawText(b.ptr, textPtr, textLen, C.uint32_t(x), C.uint32_t(y), fg.toCFloat(), bgPtr, C.uint32_t(attributes))
 	return nil
 }
 
 // SetCellWithAlphaBlending sets a single cell with alpha blending support.
-func (b *Buffer) SetCellWithAlphaBlending(x, y uint32, char rune, fg, bg RGBA, attributes uint8) error {
+func (b *Buffer) SetCellWithAlphaBlending(x, y uint32, char rune, fg, bg RGBA, attributes uint32) error {
 	if b.ptr == nil {
 		return newError("buffer is closed")
 	}
-	C.bufferSetCellWithAlphaBlending(b.ptr, C.uint32_t(x), C.uint32_t(y), C.uint32_t(char), fg.toCFloat(), bg.toCFloat(), C.uint8_t(attributes))
+	C.bufferSetCellWithAlphaBlending(b.ptr, C.uint32_t(x), C.uint32_t(y), C.uint32_t(char), fg.toCFloat(), bg.toCFloat(), C.uint32_t(attributes))
 	return nil
 }
 
@@ -261,7 +276,7 @@ func (b *Buffer) GetDirectAccess() (*DirectAccess, error) {
 		Chars:      cArrayToSlice((*uint32)(charPtr), size),
 		Foreground: cArrayToSlice((*RGBA)(unsafe.Pointer(fgPtr)), size),
 		Background: cArrayToSlice((*RGBA)(unsafe.Pointer(bgPtr)), size),
-		Attributes: cArrayToSlice((*uint8)(attrPtr), size),
+		Attributes: cArrayToSlice((*uint32)(unsafe.Pointer(attrPtr)), size),
 		Width:      width,
 		Height:     height,
 	}, nil
@@ -273,7 +288,7 @@ type DirectAccess struct {
 	Chars      []uint32 // Character codes (Unicode code points)
 	Foreground []RGBA   // Foreground colors
 	Background []RGBA   // Background colors
-	Attributes []uint8  // Text attributes
+	Attributes []uint32 // Text attributes (including link IDs in upper bits)
 	Width      uint32   // Buffer width
 	Height     uint32   // Buffer height
 }
@@ -327,4 +342,129 @@ func (b *Buffer) PopScissorRect() {
 		return
 	}
 	C.bufferPopScissorRect(b.ptr)
+}
+
+// ClearScissorRects clears all scissor rects from the stack.
+func (b *Buffer) ClearScissorRects() {
+	if b.ptr == nil {
+		return
+	}
+	C.bufferClearScissorRects(b.ptr)
+}
+
+// PushOpacity pushes an opacity value onto the opacity stack.
+func (b *Buffer) PushOpacity(opacity float32) {
+	if b.ptr == nil {
+		return
+	}
+	C.bufferPushOpacity(b.ptr, C.float(opacity))
+}
+
+// PopOpacity pops the top opacity value from the stack.
+func (b *Buffer) PopOpacity() {
+	if b.ptr == nil {
+		return
+	}
+	C.bufferPopOpacity(b.ptr)
+}
+
+// GetCurrentOpacity returns the current opacity value.
+func (b *Buffer) GetCurrentOpacity() float32 {
+	if b.ptr == nil {
+		return 1.0
+	}
+	return float32(C.bufferGetCurrentOpacity(b.ptr))
+}
+
+// ClearOpacity clears the opacity stack.
+func (b *Buffer) ClearOpacity() {
+	if b.ptr == nil {
+		return
+	}
+	C.bufferClearOpacity(b.ptr)
+}
+
+// SetCell sets a single cell without alpha blending.
+func (b *Buffer) SetCell(x, y uint32, char rune, fg, bg RGBA, attributes uint32) error {
+	if b.ptr == nil {
+		return newError("buffer is closed")
+	}
+	C.bufferSetCell(b.ptr, C.uint32_t(x), C.uint32_t(y), C.uint32_t(char), fg.toCFloat(), bg.toCFloat(), C.uint32_t(attributes))
+	return nil
+}
+
+// DrawChar draws a character at the specified position.
+func (b *Buffer) DrawChar(x, y int32, char rune, fg, bg RGBA, attributes uint32) error {
+	if b.ptr == nil {
+		return newError("buffer is closed")
+	}
+	C.bufferDrawChar(b.ptr, C.int32_t(x), C.int32_t(y), C.uint32_t(char), fg.toCFloat(), bg.toCFloat(), C.uint32_t(attributes))
+	return nil
+}
+
+// GetID returns the buffer's ID.
+func (b *Buffer) GetID(maxLen int) string {
+	if b.ptr == nil || maxLen <= 0 {
+		return ""
+	}
+	buffer := make([]byte, maxLen)
+	actualLen := C.bufferGetId(b.ptr, (*C.uint8_t)(unsafe.Pointer(&buffer[0])), C.size_t(maxLen))
+	if actualLen == 0 {
+		return ""
+	}
+	return string(buffer[:actualLen])
+}
+
+// GetRealCharSize returns the real character size of the buffer.
+func (b *Buffer) GetRealCharSize() uint32 {
+	if b.ptr == nil {
+		return 0
+	}
+	return uint32(C.bufferGetRealCharSize(b.ptr))
+}
+
+// WriteResolvedChars writes resolved characters to the output buffer.
+func (b *Buffer) WriteResolvedChars(output []byte, addLineBreaks bool) uint32 {
+	if b.ptr == nil || len(output) == 0 {
+		return 0
+	}
+	return uint32(C.bufferWriteResolvedChars(b.ptr, (*C.uint8_t)(unsafe.Pointer(&output[0])), C.size_t(len(output)), C.bool(addLineBreaks)))
+}
+
+// DrawGrayscaleBuffer draws grayscale intensity data.
+func (b *Buffer) DrawGrayscaleBuffer(posX, posY int32, intensities []float32, srcWidth, srcHeight uint32, fg, bg *RGBA) error {
+	if b.ptr == nil {
+		return newError("buffer is closed")
+	}
+	if len(intensities) == 0 {
+		return nil
+	}
+	var fgPtr, bgPtr *C.float
+	if fg != nil {
+		fgPtr = fg.toCFloat()
+	}
+	if bg != nil {
+		bgPtr = bg.toCFloat()
+	}
+	C.bufferDrawGrayscaleBuffer(b.ptr, C.int32_t(posX), C.int32_t(posY), (*C.float)(unsafe.Pointer(&intensities[0])), C.uint32_t(srcWidth), C.uint32_t(srcHeight), fgPtr, bgPtr)
+	return nil
+}
+
+// DrawGrayscaleBufferSupersampled draws supersampled grayscale intensity data.
+func (b *Buffer) DrawGrayscaleBufferSupersampled(posX, posY int32, intensities []float32, srcWidth, srcHeight uint32, fg, bg *RGBA) error {
+	if b.ptr == nil {
+		return newError("buffer is closed")
+	}
+	if len(intensities) == 0 {
+		return nil
+	}
+	var fgPtr, bgPtr *C.float
+	if fg != nil {
+		fgPtr = fg.toCFloat()
+	}
+	if bg != nil {
+		bgPtr = bg.toCFloat()
+	}
+	C.bufferDrawGrayscaleBufferSupersampled(b.ptr, C.int32_t(posX), C.int32_t(posY), (*C.float)(unsafe.Pointer(&intensities[0])), C.uint32_t(srcWidth), C.uint32_t(srcHeight), fgPtr, bgPtr)
+	return nil
 }

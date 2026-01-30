@@ -158,3 +158,48 @@ const (
 	AlignCenter
 	AlignRight
 )
+
+// Hyperlink functions
+
+// LinkAlloc allocates a new hyperlink and returns its ID.
+func LinkAlloc(url string) uint32 {
+	if len(url) == 0 {
+		return 0
+	}
+	urlPtr, urlLen := stringToC(url)
+	return uint32(C.linkAlloc(urlPtr, urlLen))
+}
+
+// LinkGetURL returns the URL for a given link ID.
+func LinkGetURL(id uint32, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
+	buffer := make([]byte, maxLen)
+	actualLen := C.linkGetUrl(C.uint32_t(id), (*C.uint8_t)(unsafe.Pointer(&buffer[0])), C.size_t(maxLen))
+	if actualLen == 0 {
+		return ""
+	}
+	return string(buffer[:actualLen])
+}
+
+// AttributesWithLink combines base attributes with a link ID.
+func AttributesWithLink(baseAttributes, linkID uint32) uint32 {
+	return uint32(C.attributesWithLink(C.uint32_t(baseAttributes), C.uint32_t(linkID)))
+}
+
+// AttributesGetLinkID extracts the link ID from attributes.
+func AttributesGetLinkID(attributes uint32) uint32 {
+	return uint32(C.attributesGetLinkId(C.uint32_t(attributes)))
+}
+
+// ClearGlobalLinkPool clears all allocated hyperlinks.
+func ClearGlobalLinkPool() {
+	C.clearGlobalLinkPool()
+}
+
+// GetArenaAllocatedBytes returns the number of bytes allocated by the arena allocator.
+// This is useful for memory debugging.
+func GetArenaAllocatedBytes() uint64 {
+	return uint64(C.getArenaAllocatedBytes())
+}

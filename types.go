@@ -9,12 +9,97 @@ import (
 	"unsafe"
 )
 
+// MeasureResult represents the result of text measurement
+type MeasureResult struct {
+	LineCount uint32
+	MaxWidth  uint32
+}
+
+// CursorState represents the current cursor state
+type CursorState struct {
+	X        uint32
+	Y        uint32
+	Visible  bool
+	Style    uint8 // 0=block, 1=line, 2=underline
+	Blinking bool
+	Color    RGBA
+}
+
+// LogicalCursor represents a logical cursor position (for EditBuffer)
+type LogicalCursor struct {
+	Row    uint32
+	Col    uint32
+	Offset uint32
+}
+
+// VisualCursor represents a visual cursor position (for EditorView)
+type VisualCursor struct {
+	VisualRow  uint32
+	VisualCol  uint32
+	LogicalRow uint32
+	LogicalCol uint32
+	Offset     uint32
+}
+
+// LineInfo represents line information from TextBufferView/EditorView
+type LineInfo struct {
+	Starts   []uint32 // Line start offsets
+	Widths   []uint32 // Line widths
+	Sources  []uint32 // Source line indices
+	Wraps    []uint32 // Wrap flags
+	MaxWidth uint32   // Maximum line width
+}
+
+// lineInfoFromC converts a C LineInfo struct to Go LineInfo
+func lineInfoFromC(info *C.LineInfo) LineInfo {
+	if info == nil {
+		return LineInfo{}
+	}
+
+	result := LineInfo{
+		MaxWidth: uint32(info.max_width),
+	}
+
+	if info.starts_len > 0 && info.starts_ptr != nil {
+		result.Starts = cArrayToSlice((*uint32)(unsafe.Pointer(info.starts_ptr)), int(info.starts_len))
+	}
+	if info.widths_len > 0 && info.widths_ptr != nil {
+		result.Widths = cArrayToSlice((*uint32)(unsafe.Pointer(info.widths_ptr)), int(info.widths_len))
+	}
+	if info.sources_len > 0 && info.sources_ptr != nil {
+		result.Sources = cArrayToSlice((*uint32)(unsafe.Pointer(info.sources_ptr)), int(info.sources_len))
+	}
+	if info.wraps_len > 0 && info.wraps_ptr != nil {
+		result.Wraps = cArrayToSlice((*uint32)(unsafe.Pointer(info.wraps_ptr)), int(info.wraps_len))
+	}
+
+	return result
+}
+
+// Highlight represents a syntax highlight range
+type Highlight struct {
+	Start    uint32
+	End      uint32
+	StyleID  uint32
+	Priority uint8
+	HLRef    uint16
+}
+
+// StyledChunk represents a chunk of styled text
+type StyledChunk struct {
+	Text       string
+	Foreground *RGBA
+	Background *RGBA
+	Attributes uint32
+	LinkID     uint32
+}
+
 // Cell represents a single terminal cell with character, colors, and attributes
 type Cell struct {
-	Char       rune  // Unicode character
-	Foreground RGBA  // Foreground color
-	Background RGBA  // Background color
-	Attributes uint8 // Text attributes (bold, italic, etc.)
+	Char       rune   // Unicode character
+	Foreground RGBA   // Foreground color
+	Background RGBA   // Background color
+	Attributes uint32 // Text attributes (bold, italic, etc.) with optional link ID in upper bits
 }
 
 // Text attributes constants
@@ -89,12 +174,6 @@ type TextChunk struct {
 	Foreground *RGBA
 	Background *RGBA
 	Attributes *uint8
-}
-
-// LineInfo represents information about a line in a text buffer
-type LineInfo struct {
-	StartIndex uint32
-	Width      uint32
 }
 
 // HitTestResult represents the result of a mouse hit test
@@ -213,12 +292,33 @@ const (
 	ModSuper uint8 = 1 << 3
 )
 
+// UnicodeMethod represents the unicode width calculation method
+type UnicodeMethod uint8
+
+const (
+	UnicodeMethodWcwidth UnicodeMethod = 0
+	UnicodeMethodUnicode UnicodeMethod = 1
+)
+
 // Capabilities represents terminal capabilities
 type Capabilities struct {
-	SupportsTruecolor       bool // Terminal supports 24-bit color
-	SupportsMouse           bool // Terminal supports mouse events
-	SupportsKittyKeyboard   bool // Terminal supports Kitty keyboard protocol
-	SupportsAlternateScreen bool // Terminal supports alternate screen buffer
+	KittyKeyboard             bool          // Terminal supports Kitty keyboard protocol
+	KittyGraphics             bool          // Terminal supports Kitty graphics protocol
+	RGB                       bool          // Terminal supports 24-bit true color
+	Unicode                   UnicodeMethod // Unicode width calculation method
+	SGRPixels                 bool          // Terminal supports SGR pixel mouse reporting
+	ColorSchemeUpdates        bool          // Terminal supports color scheme change notifications
+	ExplicitWidth             bool          // Terminal supports explicit character width
+	ScaledText                bool          // Terminal supports scaled text
+	Sixel                     bool          // Terminal supports Sixel graphics
+	FocusTracking             bool          // Terminal supports focus tracking events
+	Sync                      bool          // Terminal supports synchronized output
+	BracketedPaste            bool          // Terminal supports bracketed paste mode
+	Hyperlinks                bool          // Terminal supports hyperlinks (OSC 8)
+	ExplicitCursorPositioning bool          // Terminal supports explicit cursor positioning
+	TermName                  string        // Terminal name
+	TermVersion               string        // Terminal version
+	TermFromXTVersion         bool          // Terminal name/version from XTVERSION response
 }
 
 // Border styles
