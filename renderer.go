@@ -13,6 +13,8 @@ import (
 // It provides high-level access to terminal rendering functionality.
 type Renderer struct {
 	ptr *C.CliRenderer
+
+	bracketedPasteEnabled bool
 }
 
 // NewRenderer creates a new renderer with the specified dimensions.
@@ -36,6 +38,12 @@ func NewRenderer(width, height uint32) *Renderer {
 // After calling Close, the renderer should not be used.
 func (r *Renderer) Close() error {
 	if r.ptr != nil {
+
+		if r.bracketedPasteEnabled {
+			r.DisableBracketedPaste()
+			r.bracketedPasteEnabled = false
+		}
+
 		clearFinalizer(r)
 		C.destroyRenderer(r.ptr)
 		r.ptr = nil
@@ -293,6 +301,30 @@ func (r *Renderer) SetupTerminal(useAlternateScreen bool) error {
 		return newError("renderer is closed")
 	}
 	C.setupTerminal(r.ptr, C.bool(useAlternateScreen))
+	return nil
+}
+
+// EnableBracketedPaste enables bracketed paste mode.
+func (r *Renderer) EnableBracketedPaste() error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	if err := r.WriteOut([]byte("\x1b[?2004h")); err != nil {
+		return err
+	}
+	r.bracketedPasteEnabled = true
+	return nil
+}
+
+// DisableBracketedPaste disables bracketed paste mode.
+func (r *Renderer) DisableBracketedPaste() error {
+	if r.ptr == nil {
+		return newError("renderer is closed")
+	}
+	if err := r.WriteOut([]byte("\x1b[?2004l")); err != nil {
+		return err
+	}
+	r.bracketedPasteEnabled = false
 	return nil
 }
 
