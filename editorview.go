@@ -423,16 +423,27 @@ func (v *EditorView) SetPlaceholderStyledText(chunks []StyledChunk) {
 		return
 	}
 
-	chunkCount := C.size_t(len(chunks))
+	// Filter out empty chunks
+	var validChunks []StyledChunk
+	for _, chunk := range chunks {
+		if len(chunk.Text) > 0 {
+			validChunks = append(validChunks, chunk)
+		}
+	}
+	if len(validChunks) == 0 {
+		return
+	}
+
+	chunkCount := C.size_t(len(validChunks))
 	cChunks := (*C.StyledChunk)(C.malloc(C.size_t(unsafe.Sizeof(C.StyledChunk{})) * chunkCount))
 	if cChunks == nil {
 		return
 	}
 	defer C.free(unsafe.Pointer(cChunks))
 
-	slice := unsafe.Slice(cChunks, len(chunks))
-	fgColors := make([]*C.float, 0, len(chunks))
-	bgColors := make([]*C.float, 0, len(chunks))
+	slice := unsafe.Slice(cChunks, len(validChunks))
+	fgColors := make([]*C.float, 0, len(validChunks))
+	bgColors := make([]*C.float, 0, len(validChunks))
 	defer func() {
 		for _, p := range fgColors {
 			C.free(unsafe.Pointer(p))
@@ -442,7 +453,7 @@ func (v *EditorView) SetPlaceholderStyledText(chunks []StyledChunk) {
 		}
 	}()
 
-	for i, chunk := range chunks {
+	for i, chunk := range validChunks {
 		textBytes := []byte(chunk.Text)
 
 		slice[i].text_ptr = (*C.uint8_t)(unsafe.Pointer(&textBytes[0]))

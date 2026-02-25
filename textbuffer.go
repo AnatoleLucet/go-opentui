@@ -73,14 +73,25 @@ func (tb *TextBuffer) SetStyledText(chunks []StyledChunk) {
 		return
 	}
 
-	chunkCount := C.size_t(len(chunks))
+	// Filter out empty chunks
+	var validChunks []StyledChunk
+	for _, chunk := range chunks {
+		if len(chunk.Text) > 0 {
+			validChunks = append(validChunks, chunk)
+		}
+	}
+	if len(validChunks) == 0 {
+		return
+	}
+
+	chunkCount := C.size_t(len(validChunks))
 	cChunks := (*C.StyledChunk)(C.malloc(C.size_t(unsafe.Sizeof(C.StyledChunk{})) * chunkCount))
 	if cChunks == nil {
 		return
 	}
 
-	slice := unsafe.Slice(cChunks, len(chunks))
-	for i, chunk := range chunks {
+	slice := unsafe.Slice(cChunks, len(validChunks))
+	for i, chunk := range validChunks {
 		textBytes := []byte(chunk.Text)
 		tb.dataRefs = append(tb.dataRefs, textBytes)
 
