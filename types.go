@@ -104,22 +104,14 @@ type Cell struct {
 
 // Text attributes constants
 const (
-	AttrBold      uint8 = 1 << 0
-	AttrDim       uint8 = 1 << 1
-	AttrItalic    uint8 = 1 << 2
-	AttrUnderline uint8 = 1 << 3
-	AttrBlink     uint8 = 1 << 4
-	AttrReverse   uint8 = 1 << 5
-	AttrStrike    uint8 = 1 << 6
+	AttrBold      uint32 = 1 << 0
+	AttrDim       uint32 = 1 << 1
+	AttrItalic    uint32 = 1 << 2
+	AttrUnderline uint32 = 1 << 3
+	AttrBlink     uint32 = 1 << 4
+	AttrReverse   uint32 = 1 << 5
+	AttrStrike    uint32 = 1 << 6
 )
-
-// ClipRect defines a rectangular clipping region
-type ClipRect struct {
-	X      int32
-	Y      int32
-	Width  uint32
-	Height uint32
-}
 
 // Stats holds renderer statistics
 type Stats struct {
@@ -168,14 +160,6 @@ const (
 	FormatBGR
 )
 
-// TextChunk represents a styled text fragment
-type TextChunk struct {
-	Text       string
-	Foreground *RGBA
-	Background *RGBA
-	Attributes *uint8
-}
-
 // HitTestResult represents the result of a mouse hit test
 type HitTestResult struct {
 	ID    uint32
@@ -194,6 +178,12 @@ func (e *Error) Error() string {
 // newError creates a new OpenTUI error
 func newError(msg string) error {
 	return &Error{Message: msg}
+}
+
+// EncodedChar represents a unicode character with its display width
+type EncodedChar struct {
+	CharCode uint32
+	Width    uint8
 }
 
 // finalizer is a helper to set up automatic cleanup for CGO objects
@@ -238,59 +228,6 @@ func runesToC(runes []rune) *C.uint32_t {
 	}
 	return (*C.uint32_t)(unsafe.Pointer(&uint32s[0]))
 }
-
-// Position represents a 2D coordinate
-type Position struct {
-	X int32
-	Y int32
-}
-
-// Size represents 2D dimensions
-type Size struct {
-	Width  uint32
-	Height uint32
-}
-
-// Rect combines position and size
-type Rect struct {
-	Position
-	Size
-}
-
-// Contains checks if a point is inside the rectangle
-func (r Rect) Contains(x, y int32) bool {
-	return x >= r.X && x < r.X+int32(r.Width) &&
-		y >= r.Y && y < r.Y+int32(r.Height)
-}
-
-// Overlaps checks if two rectangles overlap
-func (r Rect) Overlaps(other Rect) bool {
-	return r.X < other.X+int32(other.Width) &&
-		r.X+int32(r.Width) > other.X &&
-		r.Y < other.Y+int32(other.Height) &&
-		r.Y+int32(r.Height) > other.Y
-}
-
-// MouseEvent represents a mouse interaction
-type MouseEvent struct {
-	Position Position
-	Button   uint8
-	Pressed  bool
-}
-
-// KeyEvent represents a keyboard interaction
-type KeyEvent struct {
-	Key       rune
-	Modifiers uint8
-}
-
-// Key modifier constants
-const (
-	ModShift uint8 = 1 << 0
-	ModCtrl  uint8 = 1 << 1
-	ModAlt   uint8 = 1 << 2
-	ModSuper uint8 = 1 << 3
-)
 
 // UnicodeMethod represents the unicode width calculation method
 type UnicodeMethod uint8

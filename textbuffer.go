@@ -14,11 +14,13 @@ type TextBuffer struct {
 	// Keep references to byte slices to prevent GC from collecting them
 	// The C library stores pointers to this data
 	dataRefs [][]byte
+	// Keep references to C allocated color arrays for styled text
+	colorRefs []unsafe.Pointer
 }
 
 // NewTextBuffer creates a new text buffer.
 // widthMethod: 0 = wcwidth, 1 = Unicode standard width
-func NewTextBuffer(widthMethod uint8) *TextBuffer {
+func NewTextBuffer(widthMethod UnicodeMethod) *TextBuffer {
 	ptr := C.createTextBuffer(C.uint8_t(widthMethod))
 	if ptr == nil {
 		return nil
@@ -36,6 +38,10 @@ func (tb *TextBuffer) Close() error {
 		C.destroyTextBuffer(tb.ptr)
 		tb.ptr = nil
 	}
+	for _, p := range tb.colorRefs {
+		C.free(p)
+	}
+	tb.colorRefs = nil
 	return nil
 }
 
@@ -47,6 +53,10 @@ func (tb *TextBuffer) Reset() {
 	C.textBufferReset(tb.ptr)
 	// Clear our references since the C buffer is cleared
 	tb.dataRefs = tb.dataRefs[:0]
+	for _, p := range tb.colorRefs {
+		C.free(p)
+	}
+	tb.colorRefs = tb.colorRefs[:0]
 }
 
 // Clear clears the text buffer.
@@ -55,6 +65,62 @@ func (tb *TextBuffer) Clear() {
 		return
 	}
 	C.textBufferClear(tb.ptr)
+}
+
+// SetStyledText sets the text buffer content from styled chunks.
+func (tb *TextBuffer) SetStyledText(chunks []StyledChunk) {
+	if tb.ptr == nil || len(chunks) == 0 {
+		return
+	}
+
+	chunkCount := C.size_t(len(chunks))
+	cChunks := (*C.StyledChunk)(C.malloc(C.size_t(unsafe.Sizeof(C.StyledChunk{})) * chunkCount))
+	if cChunks == nil {
+		return
+	}
+
+	slice := unsafe.Slice(cChunks, len(chunks))
+	for i, chunk := range chunks {
+		textBytes := []byte(chunk.Text)
+		tb.dataRefs = append(tb.dataRefs, textBytes)
+
+		slice[i].text_ptr = (*C.uint8_t)(unsafe.Pointer(&textBytes[0]))
+		slice[i].text_len = C.size_t(len(textBytes))
+		slice[i].attributes = C.uint32_t(chunk.Attributes)
+		slice[i].link_id = C.uint32_t(chunk.LinkID)
+		slice[i].fg = nil
+		slice[i].bg = nil
+
+		if chunk.Foreground != nil {
+			fg := (*C.float)(C.malloc(4 * C.size_t(unsafe.Sizeof(C.float(0)))))
+			if fg != nil {
+				fgSlice := unsafe.Slice(fg, 4)
+				fgSlice[0] = C.float(chunk.Foreground.R)
+				fgSlice[1] = C.float(chunk.Foreground.G)
+				fgSlice[2] = C.float(chunk.Foreground.B)
+				fgSlice[3] = C.float(chunk.Foreground.A)
+				slice[i].fg = fg
+				tb.colorRefs = append(tb.colorRefs, unsafe.Pointer(fg))
+			}
+		}
+		if chunk.Background != nil {
+			bg := (*C.float)(C.malloc(4 * C.size_t(unsafe.Sizeof(C.float(0)))))
+			if bg != nil {
+				bgSlice := unsafe.Slice(bg, 4)
+				bgSlice[0] = C.float(chunk.Background.R)
+				bgSlice[1] = C.float(chunk.Background.G)
+				bgSlice[2] = C.float(chunk.Background.B)
+				bgSlice[3] = C.float(chunk.Background.A)
+				slice[i].bg = bg
+				tb.colorRefs = append(tb.colorRefs, unsafe.Pointer(bg))
+			}
+		}
+	}
+
+	C.textBufferSetStyledText(tb.ptr, cChunks, chunkCount)
+
+	// Store the chunks array itself to prevent it from being freed
+	tb.colorRefs = append(tb.colorRefs, unsafe.Pointer(cChunks))
 }
 
 // Append adds text to the buffer.

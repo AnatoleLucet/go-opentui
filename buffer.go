@@ -67,6 +67,21 @@ func (b *Buffer) Close() error {
 	return nil
 }
 
+// DestroyFrameBuffer destroys a frame buffer.
+// This is a separate function from Close for frame buffers created by the C library.
+func DestroyFrameBuffer(b *Buffer) error {
+	if b == nil || b.ptr == nil {
+		return nil
+	}
+	if b.managed {
+		return newError("cannot destroy managed buffer")
+	}
+	clearFinalizer(b)
+	C.destroyFrameBuffer(b.ptr)
+	b.ptr = nil
+	return nil
+}
+
 // Width returns the buffer width in cells.
 func (b *Buffer) Width() (uint32, error) {
 	if b.ptr == nil {

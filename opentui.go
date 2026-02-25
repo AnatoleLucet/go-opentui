@@ -199,7 +199,6 @@ func ClearGlobalLinkPool() {
 }
 
 // GetArenaAllocatedBytes returns the number of bytes allocated by the arena allocator.
-// This is useful for memory debugging.
 func GetArenaAllocatedBytes() uint64 {
 	return uint64(C.getArenaAllocatedBytes())
 }

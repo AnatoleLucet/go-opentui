@@ -417,6 +417,70 @@ func (v *EditorView) SetTabIndicatorColor(color RGBA) {
 	C.editorViewSetTabIndicatorColor(v.ptr, color.toCFloat())
 }
 
+// SetPlaceholderStyledText sets placeholder text with styling.
+func (v *EditorView) SetPlaceholderStyledText(chunks []StyledChunk) {
+	if v.ptr == nil || len(chunks) == 0 {
+		return
+	}
+
+	chunkCount := C.size_t(len(chunks))
+	cChunks := (*C.StyledChunk)(C.malloc(C.size_t(unsafe.Sizeof(C.StyledChunk{})) * chunkCount))
+	if cChunks == nil {
+		return
+	}
+	defer C.free(unsafe.Pointer(cChunks))
+
+	slice := unsafe.Slice(cChunks, len(chunks))
+	fgColors := make([]*C.float, 0, len(chunks))
+	bgColors := make([]*C.float, 0, len(chunks))
+	defer func() {
+		for _, p := range fgColors {
+			C.free(unsafe.Pointer(p))
+		}
+		for _, p := range bgColors {
+			C.free(unsafe.Pointer(p))
+		}
+	}()
+
+	for i, chunk := range chunks {
+		textBytes := []byte(chunk.Text)
+
+		slice[i].text_ptr = (*C.uint8_t)(unsafe.Pointer(&textBytes[0]))
+		slice[i].text_len = C.size_t(len(textBytes))
+		slice[i].attributes = C.uint32_t(chunk.Attributes)
+		slice[i].link_id = C.uint32_t(chunk.LinkID)
+		slice[i].fg = nil
+		slice[i].bg = nil
+
+		if chunk.Foreground != nil {
+			fg := (*C.float)(C.malloc(4 * C.size_t(unsafe.Sizeof(C.float(0)))))
+			if fg != nil {
+				fgSlice := unsafe.Slice(fg, 4)
+				fgSlice[0] = C.float(chunk.Foreground.R)
+				fgSlice[1] = C.float(chunk.Foreground.G)
+				fgSlice[2] = C.float(chunk.Foreground.B)
+				fgSlice[3] = C.float(chunk.Foreground.A)
+				slice[i].fg = fg
+				fgColors = append(fgColors, fg)
+			}
+		}
+		if chunk.Background != nil {
+			bg := (*C.float)(C.malloc(4 * C.size_t(unsafe.Sizeof(C.float(0)))))
+			if bg != nil {
+				bgSlice := unsafe.Slice(bg, 4)
+				bgSlice[0] = C.float(chunk.Background.R)
+				bgSlice[1] = C.float(chunk.Background.G)
+				bgSlice[2] = C.float(chunk.Background.B)
+				bgSlice[3] = C.float(chunk.Background.A)
+				slice[i].bg = bg
+				bgColors = append(bgColors, bg)
+			}
+		}
+	}
+
+	C.editorViewSetPlaceholderStyledText(v.ptr, cChunks, chunkCount)
+}
+
 // DrawEditorView draws an EditorView to the buffer.
 func (b *Buffer) DrawEditorView(view *EditorView, x, y int32) error {
 	if b.ptr == nil {
