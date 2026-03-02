@@ -243,18 +243,30 @@ func (tb *TextBuffer) Valid() bool {
 // RegisterMemBuffer registers a memory buffer and returns its ID.
 // Returns 0xFFFF on failure.
 func (tb *TextBuffer) RegisterMemBuffer(data []byte, owned bool) uint16 {
-	if tb.ptr == nil || len(data) == 0 {
+	if tb.ptr == nil {
 		return 0xFFFF
 	}
-	return uint16(C.textBufferRegisterMemBuffer(tb.ptr, (*C.uint8_t)(unsafe.Pointer(&data[0])), C.size_t(len(data)), C.bool(owned)))
+
+	var dataPtr *C.uint8_t
+	if len(data) > 0 {
+		dataPtr = (*C.uint8_t)(unsafe.Pointer(&data[0]))
+	}
+
+	return uint16(C.textBufferRegisterMemBuffer(tb.ptr, dataPtr, C.size_t(len(data)), C.bool(owned)))
 }
 
 // ReplaceMemBuffer replaces the content of a registered memory buffer.
 func (tb *TextBuffer) ReplaceMemBuffer(id uint8, data []byte, owned bool) bool {
-	if tb.ptr == nil || len(data) == 0 {
+	if tb.ptr == nil {
 		return false
 	}
-	return bool(C.textBufferReplaceMemBuffer(tb.ptr, C.uint8_t(id), (*C.uint8_t)(unsafe.Pointer(&data[0])), C.size_t(len(data)), C.bool(owned)))
+
+	var dataPtr *C.uint8_t
+	if len(data) > 0 {
+		dataPtr = (*C.uint8_t)(unsafe.Pointer(&data[0]))
+	}
+
+	return bool(C.textBufferReplaceMemBuffer(tb.ptr, C.uint8_t(id), dataPtr, C.size_t(len(data)), C.bool(owned)))
 }
 
 // ClearMemRegistry clears all registered memory buffers.
