@@ -11,9 +11,9 @@ import "unsafe"
 // It stores styled text content that can be rendered via a TextBufferView.
 type TextBuffer struct {
 	ptr *C.TextBuffer
-	// Keep references to byte slices to prevent GC from collecting them
-	// The C library stores pointers to this data
-	dataRefs [][]byte
+	// Track C-allocated text memory to prevent GC issues
+	// All text data is copied to C memory so Go GC doesn't see dangling pointers
+	textRefs []unsafe.Pointer
 	// Keep references to C allocated color arrays for styled text
 	colorRefs []unsafe.Pointer
 }
@@ -26,7 +26,7 @@ func NewTextBuffer(widthMethod UnicodeMethod) *TextBuffer {
 		return nil
 	}
 
-	tb := &TextBuffer{ptr: ptr, dataRefs: make([][]byte, 0)}
+	tb := &TextBuffer{ptr: ptr, textRefs: make([]unsafe.Pointer, 0)}
 	setFinalizer(tb, func(tb *TextBuffer) { tb.Close() })
 	return tb
 }
@@ -38,6 +38,12 @@ func (tb *TextBuffer) Close() error {
 		C.destroyTextBuffer(tb.ptr)
 		tb.ptr = nil
 	}
+	// Free C-allocated text memory
+	for _, p := range tb.textRefs {
+		C.free(p)
+	}
+	tb.textRefs = nil
+	// Free C-allocated color memory
 	for _, p := range tb.colorRefs {
 		C.free(p)
 	}
@@ -51,8 +57,12 @@ func (tb *TextBuffer) Reset() {
 		return
 	}
 	C.textBufferReset(tb.ptr)
-	// Clear our references since the C buffer is cleared
-	tb.dataRefs = tb.dataRefs[:0]
+	// Free C-allocated text memory before clearing references
+	for _, p := range tb.textRefs {
+		C.free(p)
+	}
+	tb.textRefs = tb.textRefs[:0]
+	// Free C-allocated color memory
 	for _, p := range tb.colorRefs {
 		C.free(p)
 	}
@@ -92,11 +102,19 @@ func (tb *TextBuffer) SetStyledText(chunks []StyledChunk) {
 
 	slice := unsafe.Slice(cChunks, len(validChunks))
 	for i, chunk := range validChunks {
+		// Copy text to C-allocated memory to prevent GC issues
+		textLen := len(chunk.Text)
+		cText := C.malloc(C.size_t(textLen))
+		if cText == nil {
+			continue
+		}
+		// Copy text bytes to C memory
 		textBytes := []byte(chunk.Text)
-		tb.dataRefs = append(tb.dataRefs, textBytes)
+		copy(unsafe.Slice((*byte)(cText), textLen), textBytes)
+		tb.textRefs = append(tb.textRefs, cText)
 
-		slice[i].text_ptr = (*C.uint8_t)(unsafe.Pointer(&textBytes[0]))
-		slice[i].text_len = C.size_t(len(textBytes))
+		slice[i].text_ptr = (*C.uint8_t)(cText)
+		slice[i].text_len = C.size_t(textLen)
 		slice[i].attributes = C.uint32_t(chunk.Attributes)
 		slice[i].link_id = C.uint32_t(chunk.LinkID)
 		slice[i].fg = nil
@@ -140,12 +158,18 @@ func (tb *TextBuffer) Append(text string) {
 		return
 	}
 
-	// Convert string to byte slice and keep a reference to prevent GC
-	// The C library stores a pointer to this data
-	bytes := []byte(text)
-	tb.dataRefs = append(tb.dataRefs, bytes)
+	// Copy text to C-allocated memory to prevent GC issues
+	textLen := len(text)
+	cText := C.malloc(C.size_t(textLen))
+	if cText == nil {
+		return
+	}
+	// Copy text bytes to C memory
+	textBytes := []byte(text)
+	copy(unsafe.Slice((*byte)(cText), textLen), textBytes)
+	tb.textRefs = append(tb.textRefs, cText)
 
-	C.textBufferAppend(tb.ptr, (*C.uint8_t)(unsafe.Pointer(&bytes[0])), C.size_t(len(bytes)))
+	C.textBufferAppend(tb.ptr, (*C.uint8_t)(cText), C.size_t(textLen))
 }
 
 // GetLength returns the total display width of the text.
