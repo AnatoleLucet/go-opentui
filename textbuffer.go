@@ -116,9 +116,23 @@ func (tb *TextBuffer) SetStyledText(chunks []StyledChunk) {
 		slice[i].text_ptr = (*C.uint8_t)(cText)
 		slice[i].text_len = C.size_t(textLen)
 		slice[i].attributes = C.uint32_t(chunk.Attributes)
-		slice[i].link_id = C.uint32_t(chunk.LinkID)
 		slice[i].fg = nil
 		slice[i].bg = nil
+		slice[i].link_ptr = nil
+		slice[i].link_len = 0
+
+		// Handle URL/link if provided
+		if chunk.URL != "" {
+			urlLen := len(chunk.URL)
+			cUrl := C.malloc(C.size_t(urlLen))
+			if cUrl != nil {
+				urlBytes := []byte(chunk.URL)
+				copy(unsafe.Slice((*byte)(cUrl), urlLen), urlBytes)
+				tb.textRefs = append(tb.textRefs, cUrl)
+				slice[i].link_ptr = (*C.uint8_t)(cUrl)
+				slice[i].link_len = C.size_t(urlLen)
+			}
+		}
 
 		if chunk.Foreground != nil {
 			fg := (*C.float)(C.malloc(4 * C.size_t(unsafe.Sizeof(C.float(0)))))

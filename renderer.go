@@ -344,7 +344,7 @@ func (r *Renderer) SetCursorStyle(style CursorStyle, blinking bool) error {
 	}
 	cStyle := C.CString(string(style))
 	defer C.free(unsafe.Pointer(cStyle))
-	C.setCursorStyle(r.ptr, (*C.uint8_t)(unsafe.Pointer(cStyle)), C.size_t(len(style)), C.bool(blinking))
+	C.setCursorStyleOptions(r.ptr, (*C.uint8_t)(unsafe.Pointer(cStyle)), C.size_t(len(style)), C.bool(blinking))
 	return nil
 }
 

@@ -118,7 +118,8 @@ typedef struct {
     const float* fg;      // nullable
     const float* bg;      // nullable
     uint32_t attributes;
-    uint32_t link_id;     // 0 if no link
+    const uint8_t* link_ptr;  // nullable - pointer to URL
+    size_t link_len;          // length of URL
 } StyledChunk;
 
 // Encoded unicode character
@@ -218,7 +219,7 @@ void bufferClearOpacity(OptimizedBuffer* buffer);
 // ============================================================================
 
 void setCursorPosition(CliRenderer* renderer, int32_t x, int32_t y, bool visible);
-void setCursorStyle(CliRenderer* renderer, const uint8_t* style, size_t styleLen, bool blinking);
+void setCursorStyleOptions(CliRenderer* renderer, const uint8_t* style, size_t styleLen, bool blinking);
 void setCursorColor(CliRenderer* renderer, const float* color);
 void getCursorState(CliRenderer* renderer, CursorState* outState);
 

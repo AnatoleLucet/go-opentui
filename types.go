@@ -91,7 +91,7 @@ type StyledChunk struct {
 	Foreground *RGBA
 	Background *RGBA
 	Attributes uint32
-	LinkID     uint32
+	URL        string // Optional hyperlink URL
 }
 
 // Cell represents a single terminal cell with character, colors, and attributes

@@ -444,12 +444,16 @@ func (v *EditorView) SetPlaceholderStyledText(chunks []StyledChunk) {
 	slice := unsafe.Slice(cChunks, len(validChunks))
 	fgColors := make([]*C.float, 0, len(validChunks))
 	bgColors := make([]*C.float, 0, len(validChunks))
+	urlPtrs := make([]unsafe.Pointer, 0, len(validChunks))
 	defer func() {
 		for _, p := range fgColors {
 			C.free(unsafe.Pointer(p))
 		}
 		for _, p := range bgColors {
 			C.free(unsafe.Pointer(p))
+		}
+		for _, p := range urlPtrs {
+			C.free(p)
 		}
 	}()
 
@@ -459,9 +463,23 @@ func (v *EditorView) SetPlaceholderStyledText(chunks []StyledChunk) {
 		slice[i].text_ptr = (*C.uint8_t)(unsafe.Pointer(&textBytes[0]))
 		slice[i].text_len = C.size_t(len(textBytes))
 		slice[i].attributes = C.uint32_t(chunk.Attributes)
-		slice[i].link_id = C.uint32_t(chunk.LinkID)
 		slice[i].fg = nil
 		slice[i].bg = nil
+		slice[i].link_ptr = nil
+		slice[i].link_len = 0
+
+		// Handle URL/link if provided
+		if chunk.URL != "" {
+			urlBytes := []byte(chunk.URL)
+			cUrl := C.malloc(C.size_t(len(urlBytes)))
+			if cUrl != nil {
+				copy(unsafe.Slice((*byte)(cUrl), len(urlBytes)), urlBytes)
+				slice[i].link_ptr = (*C.uint8_t)(cUrl)
+				slice[i].link_len = C.size_t(len(urlBytes))
+				// Store to free later
+				urlPtrs = append(urlPtrs, cUrl)
+			}
+		}
 
 		if chunk.Foreground != nil {
 			fg := (*C.float)(C.malloc(4 * C.size_t(unsafe.Sizeof(C.float(0)))))

@@ -3,12 +3,12 @@ package opentui
 /*
 #cgo CFLAGS: -I${SRCDIR}
 
-#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/lib/linux_amd64 -lopentui -lm -Wl,-rpath,${SRCDIR}/lib/linux_amd64
-#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/lib/linux_arm64 -lopentui -lm -Wl,-rpath,${SRCDIR}/lib/linux_arm64
-#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/lib/darwin_amd64 -lopentui -Wl,-rpath,${SRCDIR}/lib/darwin_amd64
-#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/lib/darwin_arm64 -lopentui -Wl,-rpath,${SRCDIR}/lib/darwin_arm64
-#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/lib/windows_amd64 -lopentui
-#cgo windows,arm64 LDFLAGS: -L${SRCDIR}/lib/windows_arm64 -lopentui
+#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/lib/linux_amd64 -lopentui -lm -lpthread
+#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/lib/linux_arm64 -lopentui -lm -lpthread
+#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/lib/darwin_amd64 -lopentui
+#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/lib/darwin_arm64 -lopentui
+#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/lib/windows_amd64 -lopentui -lntdll
+#cgo windows,arm64 LDFLAGS: -L${SRCDIR}/lib/windows_arm64 -lopentui -lntdll
 
 #include "opentui.h"
 #include <stdlib.h>
@@ -100,7 +100,7 @@ func SetCursorStyle(renderer *Renderer, style CursorStyle, blinking bool) {
 	}
 	cStyle := C.CString(string(style))
 	defer C.free(unsafe.Pointer(cStyle))
-	C.setCursorStyle(renderer.ptr, (*C.uint8_t)(unsafe.Pointer(cStyle)), C.size_t(len(style)), C.bool(blinking))
+	C.setCursorStyleOptions(renderer.ptr, (*C.uint8_t)(unsafe.Pointer(cStyle)), C.size_t(len(style)), C.bool(blinking))
 }
 
 // SetCursorColor sets the cursor color for a specific renderer.
