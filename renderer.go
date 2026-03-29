@@ -20,11 +20,20 @@ type Renderer struct {
 // NewRenderer creates a new renderer with the specified dimensions.
 // Returns nil if the renderer could not be created.
 func NewRenderer(width, height uint32) *Renderer {
+	return newRenderer(width, height, false)
+}
+
+// NewTestRenderer creates a renderer that does not write to the terminal.
+func NewTestRenderer(width, height uint32) *Renderer {
+	return newRenderer(width, height, true)
+}
+
+func newRenderer(width, height uint32, testing bool) *Renderer {
 	if width == 0 || height == 0 {
 		return nil
 	}
 
-	ptr := C.createRenderer(C.uint32_t(width), C.uint32_t(height), C.bool(false))
+	ptr := C.createRenderer(C.uint32_t(width), C.uint32_t(height), C.bool(testing))
 	if ptr == nil {
 		return nil
 	}
